@@ -509,6 +509,31 @@
             return (bytes / 1024 / 1024).toFixed(1) + ' MB';
         }
 
+        // 来源可能是对象（新版 API）或字符串（旧数据）
+        function sourceLabel(s) {
+            if (typeof s === 'string') return s;
+            var label = '📄 ' + s.source;
+            if (s.page) label += '（第 ' + s.page + ' 页）';
+            if (s.snippet) label += '：' + s.snippet;
+            return label;
+        }
+
+        function buildSources(sources) {
+            var src = document.createElement('details');
+            src.className = 'sources';
+            src.innerHTML = '<summary>📎 参考来源（' + sources.length + ' 条）</summary><ul>' +
+                sources.map(s => '<li>' + sourceLabel(s) + '</li>').join('') + '</ul>';
+            return src;
+        }
+
+        function buildToolCalls(toolCalls) {
+            var div = document.createElement('div');
+            div.className = 'sources';
+            div.style.borderTop = 'none';
+            div.textContent = '🧰 调用了工具：' + toolCalls.join('、');
+            return div;
+        }
+
         // ===== ③ 删除资料 =====
         async function deleteFile(name) {
             if (!confirm('确定要删除「' + name + '」吗？')) return;
@@ -557,12 +582,11 @@
                 loading.remove();
                 if (data.ok) {
                     const answerDiv = addMessage('bot', data.answer);
+                    if (data.tool_calls && data.tool_calls.length) {
+                        answerDiv.appendChild(buildToolCalls(data.tool_calls));
+                    }
                     if (data.sources && data.sources.length) {
-                        const src = document.createElement('details');
-                        src.className = 'sources';
-                        src.innerHTML = '<summary>📎 参考来源（' + data.sources.length + ' 条）</summary><ul>' +
-                            data.sources.map(s => '<li>' + s + '</li>').join('') + '</ul>';
-                        answerDiv.appendChild(src);
+                        answerDiv.appendChild(buildSources(data.sources));
                     }
                     loadConversations();   // 刷新列表（标题可能变了）
                 } else {
@@ -634,12 +658,11 @@
                         addMessage('user', m.content);
                     } else {
                         const div = addMessage('bot', m.content);
+                        if (m.tool_calls && m.tool_calls.length) {
+                            div.appendChild(buildToolCalls(m.tool_calls));
+                        }
                         if (m.sources && m.sources.length) {
-                            const src = document.createElement('details');
-                            src.className = 'sources';
-                            src.innerHTML = '<summary>📎 参考来源（' + m.sources.length + ' 条）</summary><ul>' +
-                                m.sources.map(s => '<li>' + s + '</li>').join('') + '</ul>';
-                            div.appendChild(src);
+                            div.appendChild(buildSources(m.sources));
                         }
                     }
                 }

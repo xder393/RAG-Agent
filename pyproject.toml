@@ -1,0 +1,9 @@
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+# B008: FastAPI 的 Depends()/File() 写进函数默认值是官方推荐用法，予以忽略
+# E402: scripts/evaluate.py 需要先 sys.path.insert 再 import app，予以忽略
+select = ["E", "F", "B"]
+ignore = ["B008", "E402"]

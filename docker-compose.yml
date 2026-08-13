@@ -1,0 +1,14 @@
+services:
+  rag-agent:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data              # 上传的资料 + 索引 + 会话
+      - hf-cache:/root/.cache/huggingface   # embedding 模型缓存
+    restart: unless-stopped
+
+volumes:
+  hf-cache:

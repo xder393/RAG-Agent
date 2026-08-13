@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>知识库 Agent</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 30px 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 860px;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            padding: 24px 30px 18px;
+        }
+        .header h1 { font-size: 24px; margin-bottom: 4px; }
+        .header p { font-size: 14px; opacity: 0.85; }
+
+        /* ---- 标签栏 ---- */
+        .tab-bar {
+            display: flex;
+            background: #fafbff;
+            border-bottom: 1px solid #eee;
+            padding: 0 30px;
+        }
+        .tab {
+            padding: 14px 20px;
+            font-size: 15px;
+            color: #64748b;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all .2s;
+            user-select: none;
+        }
+        .tab:hover { color: #667eea; }
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            font-weight: 600;
+        }
+        .tab-page { display: none; }
+        .tab-page.active { display: block; }
+
+        /* ---- 资料管理页 ---- */
+        .upload-area { padding: 22px 30px; background: #fafbff; }
+        .upload-box {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        /* ---- 拖拽上传区 ---- */
+        .drop-zone {
+            flex: 1;
+            min-width: 220px;
+            padding: 28px 20px;
+            border: 2px dashed #a5b4fc;
+            border-radius: 14px;
+            text-align: center;
+            color: #667eea;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all .25s ease;
+        }
+        .drop-zone:hover { background: #eef2ff; border-color: #667eea; }
+        .drop-zone .drop-icon { font-size: 34px; margin-bottom: 8px; transition: transform .25s; }
+        .drop-zone .drop-text { line-height: 1.7; }
+        .drop-zone .browse { text-decoration: underline; font-weight: 600; }
+        .drop-zone .drop-hint { font-size: 12px; color: #94a3b8; margin-top: 6px; }
+
+        /* 拖入时的动画：脉冲光圈 + 图标跳动 */
+        .drop-zone.dragging {
+            border-color: #667eea;
+            background: #eef2ff;
+            transform: scale(1.02);
+            animation: dropPulse 0.9s ease-in-out infinite;
+        }
+        .drop-zone.dragging .drop-icon {
+            animation: bounce 0.5s ease-in-out infinite;
+        }
+        @keyframes dropPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.45); }
+            50% { box-shadow: 0 0 0 14px rgba(102, 126, 234, 0); }
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        /* 已选择的文件提示（带滑入动画） */
+        .selected-file {
+            margin-top: 12px;
+            font-size: 13px;
+            color: #334155;
+            background: #eef2ff;
+            border-radius: 8px;
+            padding: 10px 14px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+        .selected-file.show { display: flex; animation: slideIn 0.3s ease; }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .btn {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 12px;
+            background: #667eea;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .btn:hover { background: #5a6fd6; transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-danger { background: #ef4444; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-sm { padding: 8px 14px; font-size: 13px; }
+        #uploadStatus {
+            margin-top: 12px;
+            font-size: 13px;
+            color: #555;
+            min-height: 18px;
+        }
+        #uploadStatus.ok { color: #16a34a; }
+        #uploadStatus.err { color: #dc2626; }
+
+        /* ---- 文件列表 ---- */
+        .file-list-wrap { padding: 20px 30px; }
+        .file-list-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #334155;
+            margin-bottom: 12px;
+        }
+        .file-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .file-table th {
+            text-align: left;
+            padding: 10px 12px;
+            background: #f1f5f9;
+            color: #64748b;
+            font-weight: 500;
+            border-radius: 8px;
+        }
+        .file-table td {
+            padding: 12px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+        }
+        .file-table .empty {
+            text-align: center;
+            color: #94a3b8;
+            padding: 30px 0;
+        }
+        .size { color: #94a3b8; font-size: 13px; }
+
+        /* ---- 问答页 ---- */
+        .chat-wrap { display: flex; min-height: 520px; }
+        .conv-sidebar {
+            width: 210px;
+            border-right: 1px solid #eee;
+            background: #fafbff;
+            display: flex;
+            flex-direction: column;
+        }
+        .btn-new {
+            margin: 14px 14px 8px;
+            background: #eef2ff;
+            color: #667eea;
+            font-weight: 600;
+            text-align: center;
+            padding: 11px;
+        }
+        .btn-new:hover { background: #e0e7ff; }
+        .conv-list { flex: 1; overflow-y: auto; padding: 0 10px 10px; }
+        .conv-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #475569;
+            margin-bottom: 4px;
+            transition: background .15s;
+        }
+        .conv-item:hover { background: #eef2ff; }
+        .conv-item.active { background: #667eea; color: #fff; }
+        .conv-title {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .conv-del {
+            opacity: 0;
+            border: none;
+            background: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 0 2px;
+            transition: opacity .15s;
+        }
+        .conv-item:hover .conv-del { opacity: 1; }
+        .conv-item.active .conv-del { color: #fff; }
+        .conv-del:hover { color: #ef4444; }
+        .conv-empty {
+            text-align: center;
+            color: #cbd5e1;
+            font-size: 13px;
+            padding: 30px 10px;
+            line-height: 1.8;
+        }
+        .chat-area { flex: 1; display: flex; flex-direction: column; min-height: 520px; }
+        #messages {
+            flex: 1;
+            padding: 20px 30px;
+            overflow-y: auto;
+            max-height: 480px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .msg {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .msg.user {
+            align-self: flex-end;
+            background: #667eea;
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+        .msg.bot {
+            align-self: flex-start;
+            background: #f1f5f9;
+            color: #1e293b;
+            border-bottom-left-radius: 4px;
+        }
+        .msg.loading { color: #94a3b8; font-style: italic; }
+        .sources {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px dashed #cbd5e1;
+            font-size: 12px;
+            color: #64748b;
+        }
+        .sources summary { cursor: pointer; color: #667eea; font-weight: 500; }
+        .sources ul { margin: 6px 0 0 18px; }
+        .sources li { margin-bottom: 4px; }
+        .chat-hint {
+            text-align: center;
+            color: #cbd5e1;
+            font-size: 14px;
+            margin: 40px 0;
+        }
+
+        /* ---- 输入区 ---- */
+        .input-area {
+            display: flex;
+            gap: 10px;
+            padding: 16px 30px;
+            border-top: 1px solid #eee;
+            background: #fff;
+        }
+        .input-area input {
+            flex: 1;
+            padding: 13px 16px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 14px;
+            outline: none;
+            transition: border .2s;
+        }
+        .input-area input:focus { border-color: #667eea; }
+        .status-bar {
+            padding: 8px 30px;
+            font-size: 12px;
+            color: #94a3b8;
+            background: #fafbff;
+            border-top: 1px solid #f1f5f9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 知识库 Agent</h1>
+            <p>上传你的资料，然后向我提问——我只依据你的资料回答</p>
+        </div>
+
+        <!-- 标签栏 -->
+        <div class="tab-bar">
+            <div class="tab active" id="tab-manage" onclick="switchTab('manage')">📚 资料管理</div>
+            <div class="tab" id="tab-chat" onclick="switchTab('chat')">💬 问答</div>
+        </div>
+
+        <!-- 页 1：资料管理 -->
+        <div class="tab-page active" id="page-manage">
+            <div class="upload-area">
+                <div class="upload-box">
+                    <div class="drop-zone" id="dropZone">
+                        <div class="drop-icon">📄</div>
+                        <div class="drop-text">将文件拖到这里<br>或 <span class="browse">点击选择文件</span></div>
+                        <div class="drop-hint">支持 .txt / .pdf</div>
+                        <input type="file" id="fileInput" accept=".txt,.pdf" style="display:none" onchange="showSelectedFile()">
+                    </div>
+                    <button class="btn" id="uploadBtn" onclick="uploadFile()">上传资料</button>
+                </div>
+                <div class="selected-file" id="selectedFile"></div>
+                <div id="uploadStatus">拖入或选择文件后点击"上传资料"</div>
+            </div>
+
+            <div class="file-list-wrap">
+                <div class="file-list-title">已上传的资料</div>
+                <table class="file-table">
+                    <thead>
+                        <tr><th>文件名</th><th>大小</th><th style="width:80px">操作</th></tr>
+                    </thead>
+                    <tbody id="fileList">
+                        <tr><td class="empty" colspan="3">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 页 2：问答 -->
+        <div class="tab-page" id="page-chat">
+            <div class="chat-wrap">
+                <!-- 左侧：对话列表 -->
+                <div class="conv-sidebar">
+                    <button class="btn btn-new" onclick="newConversation()">＋ 新建对话</button>
+                    <div class="conv-list" id="convList"></div>
+                </div>
+                <!-- 右侧：聊天 -->
+                <div class="chat-area">
+                    <div id="messages">
+                        <div class="chat-hint">点击左侧「新建对话」开始聊天 💡</div>
+                    </div>
+                    <div class="input-area">
+                        <input type="text" id="questionInput" placeholder="输入你的问题，回车发送..."
+                               onkeydown="if(event.key==='Enter') sendMessage()">
+                        <button class="btn" id="sendBtn" onclick="sendMessage()">发送</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar" id="statusBar">知识库：加载中...</div>
+    </div>
+
+    <script>
+        // ===== 标签切换 =====
+        let greeted = false;   // 记录是否已经打过招呼（避免重复打招呼）
+
+        function switchTab(name) {
+            document.getElementById('tab-manage').className = 'tab' + (name === 'manage' ? ' active' : '');
+            document.getElementById('tab-chat').className = 'tab' + (name === 'chat' ? ' active' : '');
+            document.getElementById('page-manage').className = 'tab-page' + (name === 'manage' ? ' active' : '');
+            document.getElementById('page-chat').className = 'tab-page' + (name === 'chat' ? ' active' : '');
+
+            // 第一次进入"问答"页时，助手先打个招呼
+            if (name === 'chat' && !greeted) {
+                greeted = true;
+                const hint = document.querySelector('.chat-hint');   // 移除"输入问题"提示
+                if (hint) hint.remove();
+                addMessage('bot', '你好呀！👋 我是你的知识库助手。\n你可以先上传资料，然后向我提问，我会依据你的资料来回答～');
+            }
+        }
+
+        // ===== 工具函数 =====
+        function addMessage(role, text) {
+            const box = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = 'msg ' + role;
+            div.textContent = text;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+            return div;
+        }
+        function clearHint() {
+            const hint = document.querySelector('.chat-hint');
+            if (hint) hint.remove();
+        }
+
+        // ===== 拖拽上传 =====
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+
+        // 拖入：触发动画
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragging');
+        });
+        // 拖出：取消动画
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragging');
+        });
+        // 松开鼠标放下：拿到文件，显示"已选择"
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragging');
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                showSelectedFile();
+            }
+        });
+        // 点击拖拽区 = 打开文件选择器
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        // 显示"已选择"提示条（带滑入动画）
+        function showSelectedFile() {
+            const sel = document.getElementById('selectedFile');
+            if (fileInput.files.length) {
+                const f = fileInput.files[0];
+                sel.textContent = '📎 已选择：' + f.name + '（' + formatSize(f.size) + '）';
+                sel.classList.add('show');
+            }
+        }
+
+        // ===== ① 上传资料 =====
+        async function uploadFile() {
+            const input = document.getElementById('fileInput');
+            const status = document.getElementById('uploadStatus');
+            const btn = document.getElementById('uploadBtn');
+            if (!input.files.length) { status.textContent = '⚠️ 请先选择一个文件！'; status.className = 'err'; return; }
+
+            const formData = new FormData();
+            formData.append('file', input.files[0]);
+            btn.disabled = true;
+            status.textContent = '上传中...'; status.className = '';
+
+            try {
+                const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.ok) {
+                    status.textContent = '✅ ' + data.message;
+                    status.className = 'ok';
+                    loadFiles();
+                    loadStatus();
+                } else {
+                    status.textContent = '❌ ' + data.message;
+                    status.className = 'err';
+                }
+            } catch (e) {
+                status.textContent = '❌ 上传失败：' + e;
+                status.className = 'err';
+            }
+            btn.disabled = false;
+            input.value = '';
+            document.getElementById('selectedFile').classList.remove('show');
+        }
+
+        // ===== ② 资料列表 =====
+        async function loadFiles() {
+            const tbody = document.getElementById('fileList');
+            try {
+                const res = await fetch('/api/files');
+                const data = await res.json();
+                if (!data.ok || !data.files.length) {
+                    tbody.innerHTML = '<tr><td class="empty" colspan="3">📭 还没有资料，先上传一个吧</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.files.map(f =>
+                    '<tr>' +
+                        '<td>📄 ' + f.name + '</td>' +
+                        '<td class="size">' + formatSize(f.size) + '</td>' +
+                        '<td><button class="btn btn-danger btn-sm" onclick="deleteFile(\'' + f.name + '\')">删除</button></td>' +
+                    '</tr>'
+                ).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td class="empty" colspan="3">❌ 加载失败：' + e + '</td></tr>';
+            }
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+        }
+
+        // ===== ③ 删除资料 =====
+        async function deleteFile(name) {
+            if (!confirm('确定要删除「' + name + '」吗？')) return;
+            const status = document.getElementById('uploadStatus');
+            try {
+                const res = await fetch('/api/files/' + encodeURIComponent(name), { method: 'DELETE' });
+                const data = await res.json();
+                status.textContent = data.ok ? ('✅ ' + data.message) : ('❌ ' + data.message);
+                status.className = data.ok ? 'ok' : 'err';
+                loadFiles();
+                loadStatus();
+            } catch (e) {
+                status.textContent = '❌ 删除失败：' + e;
+                status.className = 'err';
+            }
+        }
+
+        // ===== ④ 发送问题（存入当前对话） =====
+        let currentConvId = null;   // 当前正在聊天的对话 ID
+
+        async function sendMessage() {
+            const input = document.getElementById('questionInput');
+            const question = input.value.trim();
+            if (!question) return;
+
+            // 如果还没有对话，先自动新建一个
+            if (!currentConvId) {
+                const created = await newConversation();
+                if (!created) return;
+            }
+
+            clearHint();
+            addMessage('user', question);
+            input.value = '';
+            const loading = addMessage('bot', '思考中...');
+            loading.className = 'msg bot loading';
+
+            try {
+                const res = await fetch('/api/conversations/' + currentConvId + '/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question })
+                });
+                const data = await res.json();
+
+                loading.remove();
+                if (data.ok) {
+                    const answerDiv = addMessage('bot', data.answer);
+                    if (data.sources && data.sources.length) {
+                        const src = document.createElement('details');
+                        src.className = 'sources';
+                        src.innerHTML = '<summary>📎 参考来源（' + data.sources.length + ' 条）</summary><ul>' +
+                            data.sources.map(s => '<li>' + s + '</li>').join('') + '</ul>';
+                        answerDiv.appendChild(src);
+                    }
+                    loadConversations();   // 刷新列表（标题可能变了）
+                } else {
+                    addMessage('bot', '出错了：' + data.message);
+                }
+            } catch (e) {
+                loading.remove();
+                addMessage('bot', '请求失败：' + e);
+            }
+        }
+
+        // ===== ⑤ 新建对话 =====
+        async function newConversation() {
+            try {
+                const res = await fetch('/api/conversations', { method: 'POST' });
+                const data = await res.json();
+                if (data.ok) {
+                    currentConvId = data.conversation.id;
+                    document.getElementById('messages').innerHTML = '';
+                    addMessage('bot', '你好呀！👋 我是你的知识库助手。\n你可以先上传资料，然后向我提问，我会依据你的资料来回答～');
+                    loadConversations();
+                    return true;
+                }
+            } catch (e) { console.error(e); }
+            return false;
+        }
+
+        // ===== ⑥ 加载对话列表 =====
+        async function loadConversations() {
+            const list = document.getElementById('convList');
+            try {
+                const res = await fetch('/api/conversations');
+                const data = await res.json();
+                if (!data.ok || !data.conversations.length) {
+                    list.innerHTML = '<div class="conv-empty">还没有对话<br>点击上方「新建对话」开始</div>';
+                    return;
+                }
+                list.innerHTML = data.conversations.map(c =>
+                    '<div class="conv-item' + (c.id === currentConvId ? ' active' : '') + '" data-id="' + c.id + '" onclick="selectConversation(\'' + c.id + '\')">' +
+                        '<span class="conv-title">' + c.title + '</span>' +
+                        '<button class="conv-del" onclick="event.stopPropagation();deleteConversation(\'' + c.id + '\')">✕</button>' +
+                    '</div>'
+                ).join('');
+            } catch (e) {
+                list.innerHTML = '<div class="conv-empty">加载失败</div>';
+            }
+        }
+
+        // ===== ⑦ 切换/打开一个对话 =====
+        async function selectConversation(id) {
+            currentConvId = id;
+            try {
+                const res = await fetch('/api/conversations/' + id);
+                const data = await res.json();
+                // 高亮侧边栏当前项
+                document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
+                const item = document.querySelector('.conv-item[data-id="' + id + '"]');
+                if (item) item.classList.add('active');
+
+                // 渲染消息历史
+                const box = document.getElementById('messages');
+                box.innerHTML = '';
+                if (!data.ok || !data.conversation.messages.length) {
+                    addMessage('bot', '这是一个新的对话，来问我一个问题吧～');
+                    return;
+                }
+                for (const m of data.conversation.messages) {
+                    if (m.role === 'user') {
+                        addMessage('user', m.content);
+                    } else {
+                        const div = addMessage('bot', m.content);
+                        if (m.sources && m.sources.length) {
+                            const src = document.createElement('details');
+                            src.className = 'sources';
+                            src.innerHTML = '<summary>📎 参考来源（' + m.sources.length + ' 条）</summary><ul>' +
+                                m.sources.map(s => '<li>' + s + '</li>').join('') + '</ul>';
+                            div.appendChild(src);
+                        }
+                    }
+                }
+            } catch (e) {
+                addMessage('bot', '加载对话失败：' + e);
+            }
+        }
+
+        // ===== ⑧ 删除对话 =====
+        async function deleteConversation(id) {
+            if (!confirm('确定删除这个对话吗？')) return;
+            try {
+                const res = await fetch('/api/conversations/' + id, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.ok && id === currentConvId) {
+                    currentConvId = null;
+                    document.getElementById('messages').innerHTML = '<div class="chat-hint">点击左侧「新建对话」开始聊天 💡</div>';
+                }
+                loadConversations();
+            } catch (e) { console.error(e); }
+        }
+
+        // ===== ⑤ 知识库状态 =====
+        async function loadStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                document.getElementById('statusBar').textContent =
+                    '📚 知识库当前有 ' + data.total_chunks + ' 块资料';
+            } catch (e) {
+                document.getElementById('statusBar').textContent = '📚 知识库：连接失败';
+            }
+        }
+
+        // ===== 页面打开时 =====
+        loadFiles();
+        loadStatus();
+        loadConversations();
+    </script>
+</body>
+</html>

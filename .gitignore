@@ -1,0 +1,23 @@
+# ===== 密钥与配置（绝不提交！）=====
+.env
+
+# ===== Python =====
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# ===== macOS =====
+.DS_Store
+
+# ===== 本地数据（隐私） =====
+# 对话记录（含聊天内容，隐私）
+data/*.json
+# 上传的资料文件（每个人的资料不同，不提交）
+data/*.txt
+data/*.pdf
+
+# ===== 模型缓存 =====
+*.safetensors
+*.bin
+.cache/
